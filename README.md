@@ -1,39 +1,110 @@
 # QualiaQDA
 
-Herramienta de analisis cualitativo asistido por IA para investigacion. Reemplazo open-source de MAXQDA/NVivo, enfocado en analisis tematico (Braun & Clarke) y metodos mixtos.
+QualiaQDA is an open-source qualitative data analysis tool focused on thematic analysis and mixed methods research. It combines a local-first workflow with optional AI assistance for coding suggestions, semantic search, and audio transcription.
 
-## Stack
+The project is designed around a simple rule: source material, human annotations, and model suggestions must remain clearly separated.
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Backend**: FastAPI (Python) + SQLAlchemy + SQLite
-- **IA**: Claude Code CLI (auto-codificacion) + Codex CLI (fallback)
-- **Audio**: faster-whisper (transcripcion local)
-- **Visualizaciones**: D3.js (redes, heatmaps, timelines)
+## Status
 
-## Arranque rapido
+This repository is usable as a local development project and research prototype.
+
+- Frontend: React 18 + TypeScript + Vite
+- Backend: FastAPI + SQLAlchemy + SQLite
+- Project format: one `.qualia` file per project
+- Optional AI: Claude CLI, Codex CLI, Ollama
+- Optional audio transcription: `faster-whisper`
+
+The current codebase is intended for local use and development. It is not presented as a hardened internet-facing deployment.
+
+## Core ideas
+
+- Excerpts are first-class entities and can be linked to multiple codes without duplicating text.
+- Human annotations are the source of truth for analysis.
+- AI suggestions stay separate until explicitly accepted.
+- Projects remain portable through a single SQLite-backed `.qualia` file plus associated local assets.
+
+## Features
+
+### Implemented
+
+- Project create/open/delete
+- Document import for text, Markdown, PDF, image, and audio files
+- Hierarchical codebook with colors and groups
+- Excerpt-based coding with overlapping codes
+- Typed memos with polymorphic links
+- CSV export for codebook, codings, and memos
+- Analysis views such as code networks, co-occurrence, document-by-code matrices, and timelines
+- AI suggestion review flow
+- Local audio transcription workflow
+
+### Planned or evolving
+
+- Deeper PDF and image annotation workflows
+- Richer export formats
+- More advanced semantic clustering and reporting
+- Additional interoperability and visualization features
+
+## Architecture
+
+```text
+frontend/   React application and UI state
+backend/    FastAPI app, SQLAlchemy models, services, API routes
+qualia.sh   Local startup helper for backend + frontend
+```
+
+Key backend areas:
+
+- `backend/qualia/api/`: HTTP endpoints
+- `backend/qualia/models/`: SQLAlchemy models
+- `backend/qualia/services/`: LLM and transcription helpers
+- `backend/qualia/core/`: configuration and database plumbing
+
+## Data model
+
+QualiaQDA follows a three-layer model:
+
+1. Source data: imported documents and files.
+2. Human annotations: excerpts, codings, memos, tags, relationships.
+3. Model artifacts: suggestions and derived AI outputs pending review.
+
+That separation is deliberate. Pending AI output should never be treated as accepted analysis.
+
+## Quick start
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- `npm`
+
+Optional integrations:
+
+- `claude` CLI
+- `codex` CLI
+- Ollama with a local model
+- `faster-whisper`
+
+### One-command local startup
 
 ```bash
-# Todo de una vez:
 ./qualia.sh
-
-# → Frontend en http://localhost:5173
-# → Backend  en http://localhost:8001
-# → API docs en http://localhost:8001/docs
 ```
 
-### Virtual environment
+This launches the backend on port `8001` and a preview server for the frontend on port `5173`.
 
-El venv vive en `/tmp/qualia_venv/` (fuera del proyecto). El script `qualia.sh` lo crea automaticamente si no existe.
+### Manual startup
+
+Backend:
 
 ```bash
-# Instalar dependencias manualmente:
-/tmp/qualia_venv/bin/pip install -r backend/requirements.txt
-
-# Instalar Whisper (para transcripcion de audio):
-/tmp/qualia_venv/bin/pip install faster-whisper
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn qualia.main:app --reload --port 8001
 ```
 
-### Frontend (si no usas qualia.sh)
+Frontend:
 
 ```bash
 cd frontend
@@ -41,60 +112,37 @@ npm install
 npm run dev
 ```
 
-## Estructura
+## Configuration
 
-```
-backend/
-  qualia/
-    api/           Endpoints FastAPI (projects, documents, codes, coding, memos, ai, transcription, analysis, export)
-    models/        SQLAlchemy models (15 modelos, 3 capas semanticas)
-    services/      LLM CLI runner, Whisper service
-    core/          Config, database session factory
-frontend/
-  src/
-    components/    React components (DocumentViewer, CodeBook, AiReviewPanel, AudioPlayer, AnalysisPanel, ...)
-    contexts/      ProjectContext (estado global)
-    api.ts         Cliente HTTP tipado
-    types/         TypeScript interfaces
-qualia.sh          Script de arranque (backend + frontend)
-```
+The backend reads configuration from environment variables with the `QUALIA_` prefix. Relevant settings include:
 
-## Funcionalidades
+- `QUALIA_PORT`
+- `QUALIA_DATA_DIR`
+- `QUALIA_CORS_ORIGINS`
+- `QUALIA_CLAUDE_CODE_CLI_PATH`
+- `QUALIA_CODEX_CLI_PATH`
+- `QUALIA_OLLAMA_URL`
+- `QUALIA_OLLAMA_CHAT_MODEL`
 
-### Fase 1 — Core QDA (completa)
-- Proyectos `.qualia` (crear/abrir/eliminar)
-- Documentos: txt, md, pdf (paginado), imagen, audio
-- Codigos jerarquicos con colores + grupos + drag-drop
-- Codificacion basada en excerpts (entidad de primera clase)
-- In-vivo coding, highlighting multicolor, codigos superpuestos
-- Memos tipados (7 tipos) con enlaces polimorficos
-- Exportacion CSV (codebook, codings, memos)
+By default, local project files are stored under `~/.qualia/projects`.
 
-### Fase 2 — Analisis y visualizaciones (completa)
-- Red de codigos (D3 force-directed graph)
-- Co-ocurrencia de codigos (heatmap)
-- Matriz documentos x codigos (heatmap)
-- Linea temporal de codificaciones y memos
-- Red de evidencias (bipartito codigos-documentos)
+## Repository hygiene
 
-### Fase 3 — IA y audio (completa)
-- Auto-codificacion con Claude Code CLI
-- Panel de revision de sugerencias IA (aceptar/rechazar)
-- Separacion estricta: sugerencias IA en capa 3 hasta aceptacion
-- Transcripcion de audio con Whisper (local)
-- Reproductor sincronizado con timestamps
+The repository is set up to ignore local project databases, local env files, generated exports, runtime artifacts, and zip files. Do not commit:
 
-## Arquitectura de datos (3 capas)
+- `.env` files
+- `.qualia` project files
+- local SQLite databases
+- ChromaDB data
+- exports or temporary runtime artifacts
 
-1. **Capa 1 — Datos fuente**: Documentos importados (inmutables)
-2. **Capa 2 — Anotaciones humanas**: Excerpts, codigos, codings, memos
-3. **Capa 3 — Artefactos IA**: Sugerencias pendientes de revision
+## Notes for contributors
 
-Las sugerencias IA nunca se mezclan con anotaciones humanas hasta que el investigador las acepta explicitamente.
+- Keep the three-layer data separation intact.
+- Avoid hardcoding machine-specific paths.
+- Treat local-only development assumptions as local-only.
+- Do not commit real research data, credentials, or generated local state.
 
-## Notas
+## License
 
-- Un proyecto = un archivo `.qualia` (SQLite renombrado)
-- Los `.qualia` se guardan en `~/.qualia/projects/`
-- La IA usa `claude -p` (CLI print mode) — requiere estar logueado con cuenta Max
-- Whisper corre local (CPU por defecto, configurable a CUDA/MPS)
+MIT. See [LICENSE](LICENSE).
