@@ -223,3 +223,29 @@ export interface SimilarSegment {
   end_pos: number | null;
   score: number;
 }
+
+export interface ReportRequest {
+  document_ids: string[];
+  code_ids: string[];
+  include_memos: boolean;
+  include_relationships: boolean;
+  include_case_attributes: boolean;
+  co_occurrence_level: 'excerpt' | 'document';
+  max_co_occurrences: number;
+  max_relationship_evidence: number;
+}
+
+export interface ReportPreview {
+  title: string;
+  generated_at: string;
+  summary: {
+    documents: number;
+    codes: number;
+    codings: number;
+    memos: number;
+    relationships: number;
+    co_occurrences: number;
+  };
+  markdown: string;
+  csv_files: string[];
+}

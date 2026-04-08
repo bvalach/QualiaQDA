@@ -9,6 +9,7 @@ import { RelationshipsPanel } from './RelationshipsPanel';
 import { TagsPanel } from './TagsPanel';
 import { CaseAttributesPanel } from './CaseAttributesPanel';
 import { SnapshotsPanel } from './SnapshotsPanel';
+import { ReportBuilderPanel } from './ReportBuilderPanel';
 import * as api from '../api';
 import { exportUrl } from '../api';
 
@@ -18,7 +19,7 @@ export function LeftPanel() {
   const [sections, setSections] = useState({
     docs: true, codes: true, memos: false,
     search: false, relationships: false, tags: false,
-    caseAttrs: false, snapshots: false,
+    caseAttrs: false, snapshots: false, report: false,
   });
 
   const toggleSection = (key: keyof typeof sections) => {
@@ -218,6 +219,18 @@ export function LeftPanel() {
           {sections.snapshots && (
             <div className="left-section-content">
               <SnapshotsPanel />
+            </div>
+          )}
+        </div>
+
+        {/* Report builder section */}
+        <div className="left-section">
+          <div className="left-section-header" onClick={() => toggleSection('report')}>
+            <span>{sections.report ? '\u25BC' : '\u25B6'} Informe</span>
+          </div>
+          {sections.report && (
+            <div className="left-section-content">
+              <ReportBuilderPanel />
             </div>
           )}
         </div>

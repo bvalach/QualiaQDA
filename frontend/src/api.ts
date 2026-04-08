@@ -23,6 +23,8 @@ import type {
   SnapshotOut,
   EmbedStatus,
   SimilarSegment,
+  ReportRequest,
+  ReportPreview,
 } from './types';
 
 const api = axios.create({ baseURL: '/api' });
@@ -113,6 +115,12 @@ export const removeMemoLink = (memoId: string, link: EntityLinkData) =>
 
 // Export
 export const exportUrl = (type: 'codebook' | 'codings' | 'memos') => `/api/export/${type}`;
+export const previewReport = (data: ReportRequest) =>
+  api.post<ReportPreview>('/export/report/preview', data).then((r) => r.data);
+export const downloadReportMarkdown = (data: ReportRequest) =>
+  api.post('/export/report/markdown', data, { responseType: 'blob' }).then((r) => r.data as Blob);
+export const downloadReportCsvBundle = (data: ReportRequest) =>
+  api.post('/export/report/csv-bundle', data, { responseType: 'blob' }).then((r) => r.data as Blob);
 
 // AI Assistance (Layer 3)
 export const listAiProviders = () =>
