@@ -35,6 +35,7 @@ export function AnalysisPanel() {
   // Co-occurrence detail panel
   const [coDetail, setCoDetail] = useState<CoOccurrenceDetailData | null>(null);
   const [coDetailLoading, setCoDetailLoading] = useState(false);
+  const [coView, setCoView] = useState<'matrix' | 'fragments'>('matrix');
 
   // Measure container
   useEffect(() => {
@@ -72,12 +73,14 @@ export function AnalysisPanel() {
 
     // Clear detail when switching tabs
     setCoDetail(null);
+    setCoView('matrix');
 
     return () => { cancelled = true; };
   }, [activeTab]);
 
   const handleCoOccurrenceClick = (codeAId: string, codeBId: string) => {
     setCoDetailLoading(true);
+    setCoView('fragments');
     api.get('/analysis/co-occurrence/detail', {
       params: { code_a_id: codeAId, code_b_id: codeBId },
     })
@@ -103,65 +106,111 @@ export function AnalysisPanel() {
       }
       case 'co-occurrence': {
         const cd = d as { codes: { id: string; name: string; color: string }[]; matrix: number[][] };
-        // Leave room for detail panel
-        const vizWidth = coDetail ? Math.max(300, dims.width - 320) : dims.width;
         return (
-          <div style={{ display: 'flex', height: dims.height }}>
-            <div style={{ flex: coDetail ? undefined : 1, width: coDetail ? vizWidth : undefined, overflow: 'auto' }}>
-              <CoOccurrenceViz
-                codes={cd.codes}
-                matrix={cd.matrix}
-                width={vizWidth}
-                height={dims.height}
-                onCellClick={handleCoOccurrenceClick}
-              />
+          <div style={{ display: 'flex', flexDirection: 'column', height: dims.height }}>
+            <div
+              style={{
+                display: 'flex',
+                gap: 6,
+                padding: '8px 10px 6px',
+                borderBottom: '1px solid var(--border-color)',
+                background: 'var(--bg-secondary)',
+              }}
+            >
+              <button
+                className="ghost small"
+                onClick={() => setCoView('matrix')}
+                style={{
+                  fontWeight: coView === 'matrix' ? 600 : 400,
+                  opacity: coView === 'matrix' ? 1 : 0.7,
+                }}
+              >
+                Matriz
+              </button>
+              <button
+                className="ghost small"
+                onClick={() => setCoView('fragments')}
+                style={{
+                  fontWeight: coView === 'fragments' ? 600 : 400,
+                  opacity: coView === 'fragments' ? 1 : 0.7,
+                }}
+              >
+                Fragmentos
+              </button>
             </div>
-            {/* Detail side panel */}
-            {(coDetail || coDetailLoading) && (
-              <div className="cooccurrence-detail-panel">
-                {coDetailLoading && (
-                  <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 13 }}>
-                    Cargando excerpts...
-                  </div>
-                )}
-                {coDetail && !coDetailLoading && (
-                  <>
-                    <div className="cooccurrence-detail-header">
-                      <span>
-                        <span className="cooccurrence-dot" style={{ backgroundColor: coDetail.code_a.color }} />
-                        {coDetail.code_a.name}
-                        {coDetail.code_a.id !== coDetail.code_b.id && (
-                          <>
-                            {' + '}
-                            <span className="cooccurrence-dot" style={{ backgroundColor: coDetail.code_b.color }} />
-                            {coDetail.code_b.name}
-                          </>
-                        )}
-                      </span>
-                      <button className="ghost small" onClick={() => setCoDetail(null)}>x</button>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {coView === 'matrix' ? (
+                <CoOccurrenceViz
+                  codes={cd.codes}
+                  matrix={cd.matrix}
+                  width={dims.width}
+                  height={dims.height - 46}
+                  onCellClick={handleCoOccurrenceClick}
+                />
+              ) : (
+                <div
+                  className="cooccurrence-detail-panel"
+                  style={{ width: '100%', height: '100%', borderLeft: 'none' }}
+                >
+                  {coDetailLoading && (
+                    <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 13 }}>
+                      Cargando fragmentos...
                     </div>
-                    <div className="cooccurrence-detail-count">
-                      {coDetail.count} {coDetail.code_a.id === coDetail.code_b.id ? 'codificaciones' : 'co-ocurrencias'}
+                  )}
+                  {!coDetailLoading && !coDetail && (
+                    <div className="empty-state" style={{ height: '100%', padding: 24 }}>
+                      <div>Selecciona una celda desde la vista Matriz.</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                        Al hacer clic sobre una co-ocurrencia verás aquí los fragmentos compartidos.
+                      </div>
                     </div>
-                    <div className="cooccurrence-detail-list">
-                      {coDetail.excerpts.map((ex) => (
-                        <div key={ex.id} className="cooccurrence-detail-excerpt">
-                          <div className="cooccurrence-detail-doc">{ex.document_name}</div>
-                          <div className="cooccurrence-detail-text">
-                            &ldquo;{ex.text.length > 200 ? ex.text.slice(0, 200) + '...' : ex.text}&rdquo;
+                  )}
+                  {coDetail && !coDetailLoading && (
+                    <>
+                      <div className="cooccurrence-detail-header">
+                        <span>
+                          <span className="cooccurrence-dot" style={{ backgroundColor: coDetail.code_a.color }} />
+                          {coDetail.code_a.name}
+                          {coDetail.code_a.id !== coDetail.code_b.id && (
+                            <>
+                              {' + '}
+                              <span className="cooccurrence-dot" style={{ backgroundColor: coDetail.code_b.color }} />
+                              {coDetail.code_b.name}
+                            </>
+                          )}
+                        </span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="ghost small" onClick={() => setCoView('matrix')}>
+                            Matriz
+                          </button>
+                          <button className="ghost small" onClick={() => setCoDetail(null)}>
+                            x
+                          </button>
+                        </div>
+                      </div>
+                      <div className="cooccurrence-detail-count">
+                        {coDetail.count} {coDetail.code_a.id === coDetail.code_b.id ? 'codificaciones' : 'co-ocurrencias'}
+                      </div>
+                      <div className="cooccurrence-detail-list">
+                        {coDetail.excerpts.map((ex) => (
+                          <div key={ex.id} className="cooccurrence-detail-excerpt">
+                            <div className="cooccurrence-detail-doc">{ex.document_name}</div>
+                            <div className="cooccurrence-detail-text">
+                              &ldquo;{ex.text.length > 400 ? ex.text.slice(0, 400) + '...' : ex.text}&rdquo;
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                      {coDetail.excerpts.length === 0 && (
-                        <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: 8 }}>
-                          Sin excerpts compartidos
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+                        ))}
+                        {coDetail.excerpts.length === 0 && (
+                          <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: 8 }}>
+                            Sin fragmentos compartidos
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         );
       }

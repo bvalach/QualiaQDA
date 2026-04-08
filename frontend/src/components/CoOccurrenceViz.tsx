@@ -21,9 +21,33 @@ interface Props {
   onCellClick?: (codeAId: string, codeBId: string) => void;
 }
 
+function getMatrixLayout(codes: CodeInfo[], width: number, height: number, zoom: number) {
+  const n = Math.max(1, codes.length);
+  const longestLabel = codes.reduce((max, code) => Math.max(max, code.name.length), 10);
+  const labelMargin = Math.min(260, Math.max(120, longestLabel * 7));
+  const margin = { top: labelMargin, right: 24, bottom: 24, left: labelMargin + 12 };
+
+  const fitCellSize = Math.min(
+    (width - margin.left - margin.right) / n,
+    (height - margin.top - margin.bottom) / n
+  );
+  const preferredCellSize = n <= 20 ? 30 : n <= 40 ? 22 : 18;
+  const baseCellSize = Math.max(
+    preferredCellSize,
+    Math.min(36, Number.isFinite(fitCellSize) ? fitCellSize : preferredCellSize)
+  );
+  const cellSize = Math.max(12, Math.min(56, Math.round(baseCellSize * zoom)));
+  const renderWidth = Math.max(width, margin.left + margin.right + n * cellSize);
+  const renderHeight = Math.max(height, margin.top + margin.bottom + n * cellSize);
+
+  return { margin, cellSize, renderWidth, renderHeight, n };
+}
+
 export function CoOccurrenceViz({ codes, matrix, width, height, onCellClick }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [selected, setSelected] = useState<CellSelection | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const layout = getMatrixLayout(codes, width, height, zoom);
 
   useEffect(() => {
     if (!svgRef.current || codes.length === 0) return;
@@ -31,13 +55,7 @@ export function CoOccurrenceViz({ codes, matrix, width, height, onCellClick }: P
     const svg = d3.select(svgRef.current);
     svg.selectAll('*').remove();
 
-    const n = codes.length;
-    const margin = { top: 100, right: 20, bottom: 20, left: 120 };
-    const cellSize = Math.min(
-      (width - margin.left - margin.right) / n,
-      (height - margin.top - margin.bottom) / n,
-      36
-    );
+    const { n, margin, cellSize } = layout;
 
     const maxVal = Math.max(1, ...matrix.flat().filter((_, i) => {
       const row = Math.floor(i / n);
@@ -136,7 +154,7 @@ export function CoOccurrenceViz({ codes, matrix, width, height, onCellClick }: P
         .attr('fill', '#1d1d1f')
         .text(codes[j].name.length > 15 ? codes[j].name.slice(0, 14) + '...' : codes[j].name);
     }
-  }, [codes, matrix, width, height, onCellClick]);
+  }, [codes, matrix, layout, onCellClick]);
 
   const handleExportPNG = () => {
     const svg = svgRef.current;
@@ -146,8 +164,8 @@ export function CoOccurrenceViz({ codes, matrix, width, height, onCellClick }: P
     const svgStr = serializer.serializeToString(svg);
     const canvas = document.createElement('canvas');
     const scale = 2; // retina
-    canvas.width = width * scale;
-    canvas.height = height * scale;
+    canvas.width = layout.renderWidth * scale;
+    canvas.height = layout.renderHeight * scale;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -155,7 +173,7 @@ export function CoOccurrenceViz({ codes, matrix, width, height, onCellClick }: P
     const img = new Image();
     img.onload = () => {
       ctx.fillStyle = '#fafafa';
-      ctx.fillRect(0, 0, width, height);
+      ctx.fillRect(0, 0, layout.renderWidth, layout.renderHeight);
       ctx.drawImage(img, 0, 0);
       const link = document.createElement('a');
       link.download = 'co-ocurrencia.png';
@@ -189,9 +207,30 @@ export function CoOccurrenceViz({ codes, matrix, width, height, onCellClick }: P
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width, height, overflow: 'auto', background: '#fafafa' }}>
       {/* Export buttons */}
       <div className="cooccurrence-toolbar">
+        <button
+          className="ghost small"
+          onClick={() => setZoom((current) => Math.max(0.75, Number((current - 0.15).toFixed(2))))}
+          title="Reducir zoom"
+        >
+          -
+        </button>
+        <button
+          className="ghost small"
+          onClick={() => setZoom(1)}
+          title="Volver al tamaño adaptativo"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          className="ghost small"
+          onClick={() => setZoom((current) => Math.min(2.5, Number((current + 0.15).toFixed(2))))}
+          title="Aumentar zoom"
+        >
+          +
+        </button>
         <button className="ghost small" onClick={handleExportPNG} title="Exportar como imagen PNG">
           PNG
         </button>
@@ -200,7 +239,12 @@ export function CoOccurrenceViz({ codes, matrix, width, height, onCellClick }: P
         </button>
       </div>
 
-      <svg ref={svgRef} width={width} height={height} style={{ background: '#fafafa' }} />
+      <svg
+        ref={svgRef}
+        width={layout.renderWidth}
+        height={layout.renderHeight}
+        style={{ display: 'block' }}
+      />
 
       {/* Selection info tooltip */}
       {selected && (

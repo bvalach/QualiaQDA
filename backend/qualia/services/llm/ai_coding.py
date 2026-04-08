@@ -177,11 +177,17 @@ async def suggest_codes_for_excerpt(
     prompt = _build_suggest_prompt(excerpt_text, codebook, document_context)
     result = await run_llm(prompt, provider=provider, timeout=90)
 
+    parsed = extract_json_from_response(result.text) if result.text else None
     if not result.success:
-        logger.error("LLM call failed: %s", result.error)
-        return [], None
+        if parsed is None:
+            logger.error("LLM call failed: %s", result.error)
+            return [], result.model
+        logger.warning(
+            "Recovered partial suggest-codes output from %s after error: %s",
+            result.model,
+            result.error,
+        )
 
-    parsed = extract_json_from_response(result.text)
     if not isinstance(parsed, list):
         logger.error("LLM returned non-list: %s", result.text[:200])
         return [], result.model
@@ -215,11 +221,17 @@ async def auto_code_document(
     prompt = _build_autocode_prompt(document_text, codebook, doc_name)
     result = await run_llm(prompt, provider=provider, timeout=180)
 
+    parsed = extract_json_from_response(result.text) if result.text else None
     if not result.success:
-        logger.error("LLM call failed: %s", result.error)
-        return [], None
+        if parsed is None:
+            logger.error("LLM call failed: %s", result.error)
+            return [], result.model
+        logger.warning(
+            "Recovered partial auto-code output from %s after error: %s",
+            result.model,
+            result.error,
+        )
 
-    parsed = extract_json_from_response(result.text)
     if not isinstance(parsed, list):
         logger.error("LLM returned non-list: %s", result.text[:200])
         return [], result.model
@@ -257,11 +269,17 @@ async def suggest_themes(
     prompt = _build_themes_prompt(coded_excerpts, codebook)
     result = await run_llm(prompt, provider=provider, timeout=120)
 
+    parsed = extract_json_from_response(result.text) if result.text else None
     if not result.success:
-        logger.error("LLM call failed: %s", result.error)
-        return [], None
+        if parsed is None:
+            logger.error("LLM call failed: %s", result.error)
+            return [], result.model
+        logger.warning(
+            "Recovered partial theme output from %s after error: %s",
+            result.model,
+            result.error,
+        )
 
-    parsed = extract_json_from_response(result.text)
     if not isinstance(parsed, list):
         logger.error("LLM returned non-list: %s", result.text[:200])
         return [], result.model
