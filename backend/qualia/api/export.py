@@ -14,6 +14,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from qualia.core.csv_utils import sanitize_csv_row
 from qualia.core.database import get_db
 from qualia.models import (
     CaseAttribute,
@@ -637,8 +638,8 @@ def _render_markdown_report(
 def _write_csv(zip_file: zipfile.ZipFile, filename: str, headers: list[str], rows: list[list[object]]) -> None:
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(headers)
-    writer.writerows(rows)
+    writer.writerow(sanitize_csv_row(headers))
+    writer.writerows(sanitize_csv_row(row) for row in rows)
     zip_file.writestr(filename, output.getvalue().encode("utf-8"))
 
 
@@ -737,9 +738,9 @@ def export_codebook(db: Session = Depends(get_db)):
     codes = db.query(Code).order_by(Code.sort_order).all()
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["id", "name", "parent_id", "description", "color", "sort_order"])
+    writer.writerow(sanitize_csv_row(["id", "name", "parent_id", "description", "color", "sort_order"]))
     for c in codes:
-        writer.writerow([c.id, c.name, c.parent_id or "", c.description or "", c.color, c.sort_order])
+        writer.writerow(sanitize_csv_row([c.id, c.name, c.parent_id or "", c.description or "", c.color, c.sort_order]))
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -760,16 +761,16 @@ def export_codings(db: Session = Depends(get_db)):
     )
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
+    writer.writerow(sanitize_csv_row([
         "coding_id", "excerpt_id", "document_name", "code_name", "code_color",
         "start_pos", "end_pos", "page_number", "text", "created_by", "created_at",
-    ])
+    ]))
     for coding, code, excerpt, doc in codings:
-        writer.writerow([
+        writer.writerow(sanitize_csv_row([
             coding.id, excerpt.id, doc.name, code.name, code.color,
             excerpt.start_pos, excerpt.end_pos, excerpt.page_number or "",
             excerpt.text or "", coding.created_by, coding.created_at.isoformat(),
-        ])
+        ]))
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -784,19 +785,19 @@ def export_memos(db: Session = Depends(get_db)):
     memos = db.query(Memo).order_by(Memo.updated_at.desc()).all()
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
+    writer.writerow(sanitize_csv_row([
         "id", "title", "content", "memo_type", "links", "created_at", "updated_at",
-    ])
+    ]))
     for m in memos:
         links = db.query(EntityLink).filter(
             EntityLink.source_type == "memo",
             EntityLink.source_id == m.id,
         ).all()
         links_str = "; ".join(f"{lnk.target_type}:{lnk.target_id}" for lnk in links)
-        writer.writerow([
+        writer.writerow(sanitize_csv_row([
             m.id, m.title or "", m.content, m.memo_type,
             links_str, m.created_at.isoformat(), m.updated_at.isoformat(),
-        ])
+        ]))
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),

@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from qualia.core.csv_utils import sanitize_csv_row
 from qualia.core.database import get_db
 from qualia.models import (
     Code, Coding, Excerpt, Document, Memo, EntityLink, CodeRelationship,
@@ -249,7 +250,7 @@ def export_co_occurrence_detail(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow([
+    writer.writerow(sanitize_csv_row([
         "level",
         "code_a_id",
         "code_a_name",
@@ -263,13 +264,13 @@ def export_co_occurrence_detail(
         "end_pos",
         "source",
         "excerpt_text",
-    ])
+    ]))
     for excerpt in excerpts:
         source = excerpt["document_name"]
         if excerpt["page_number"] is not None:
             source += f" · p. {excerpt['page_number']}"
         source += f" · {excerpt['start_pos']}-{excerpt['end_pos']}"
-        writer.writerow([
+        writer.writerow(sanitize_csv_row([
             level,
             code_a.id,
             code_a.name,
@@ -283,7 +284,7 @@ def export_co_occurrence_detail(
             excerpt["end_pos"],
             source,
             excerpt["text"] or "",
-        ])
+        ]))
     output.seek(0)
 
     return StreamingResponse(
