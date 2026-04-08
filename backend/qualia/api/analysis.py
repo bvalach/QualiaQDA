@@ -128,6 +128,13 @@ def _co_occurrence_filename(code_a_name: str, code_b_name: str) -> str:
     return f"co-ocurrencia-{slugify(code_a_name)}-{slugify(code_b_name)}.csv"
 
 
+def _sanitize_csv_cell(value: object) -> object:
+    """Neutralize spreadsheet formulas in text cells."""
+    if isinstance(value, str) and value and value.lstrip().startswith(("=", "+", "-", "@")):
+        return f"'{value}"
+    return value
+
+
 def _get_co_occurrence_excerpts(
     db: Session,
     *,
@@ -269,7 +276,7 @@ def export_co_occurrence_detail(
         if excerpt["page_number"] is not None:
             source += f" · p. {excerpt['page_number']}"
         source += f" · {excerpt['start_pos']}-{excerpt['end_pos']}"
-        writer.writerow([
+        row = [
             level,
             code_a.id,
             code_a.name,
@@ -283,7 +290,8 @@ def export_co_occurrence_detail(
             excerpt["end_pos"],
             source,
             excerpt["text"] or "",
-        ])
+        ]
+        writer.writerow([_sanitize_csv_cell(cell) for cell in row])
     output.seek(0)
 
     return StreamingResponse(
