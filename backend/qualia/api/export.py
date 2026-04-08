@@ -635,10 +635,15 @@ def _render_markdown_report(
 
 
 def _write_csv(zip_file: zipfile.ZipFile, filename: str, headers: list[str], rows: list[list[object]]) -> None:
+    def _sanitize_csv_cell(value: object) -> object:
+        if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
+            return f"'{value}"
+        return value
+
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(headers)
-    writer.writerows(rows)
+    writer.writerows([[_sanitize_csv_cell(cell) for cell in row] for row in rows])
     zip_file.writestr(filename, output.getvalue().encode("utf-8"))
 
 
