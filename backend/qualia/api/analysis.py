@@ -1,8 +1,12 @@
 from __future__ import annotations
+import csv
+import io
+import re
 from typing import Optional
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -115,6 +119,84 @@ class CoOccurrenceDetail(BaseModel):
     excerpts: list[dict]  # [{id, text, document_name}]
 
 
+def _co_occurrence_filename(code_a_name: str, code_b_name: str) -> str:
+    def slugify(value: str) -> str:
+        value = value.strip().lower()
+        value = re.sub(r"[^a-z0-9]+", "-", value)
+        return value.strip("-") or "codigo"
+
+    return f"co-ocurrencia-{slugify(code_a_name)}-{slugify(code_b_name)}.csv"
+
+
+def _get_co_occurrence_excerpts(
+    db: Session,
+    *,
+    code_a_id: str,
+    code_b_id: str,
+    level: str,
+) -> list[dict]:
+    if code_a_id == code_b_id:
+        rows = (
+            db.query(Excerpt, Document)
+            .join(Coding, Coding.excerpt_id == Excerpt.id)
+            .join(Document, Excerpt.document_id == Document.id)
+            .filter(Coding.code_id == code_a_id)
+            .distinct()
+            .order_by(Document.name.asc(), Excerpt.page_number.asc(), Excerpt.start_pos.asc())
+            .all()
+        )
+    elif level == "excerpt":
+        excerpt_ids_for_code_a = (
+            db.query(Coding.excerpt_id)
+            .filter(Coding.code_id == code_a_id)
+            .subquery()
+        )
+        rows = (
+            db.query(Excerpt, Document)
+            .join(Coding, Coding.excerpt_id == Excerpt.id)
+            .join(Document, Excerpt.document_id == Document.id)
+            .filter(
+                Coding.code_id == code_b_id,
+                Excerpt.id.in_(excerpt_ids_for_code_a),
+            )
+            .distinct()
+            .order_by(Document.name.asc(), Excerpt.page_number.asc(), Excerpt.start_pos.asc())
+            .all()
+        )
+    else:
+        document_ids_for_code_a = (
+            db.query(Excerpt.document_id)
+            .join(Coding, Coding.excerpt_id == Excerpt.id)
+            .filter(Coding.code_id == code_a_id)
+            .subquery()
+        )
+        rows = (
+            db.query(Excerpt, Document)
+            .join(Coding, Coding.excerpt_id == Excerpt.id)
+            .join(Document, Excerpt.document_id == Document.id)
+            .filter(
+                Coding.code_id == code_b_id,
+                Excerpt.document_id.in_(document_ids_for_code_a),
+            )
+            .distinct()
+            .order_by(Document.name.asc(), Excerpt.page_number.asc(), Excerpt.start_pos.asc())
+            .all()
+        )
+
+    return [
+        {
+            "id": excerpt.id,
+            "text": excerpt.text,
+            "document_id": document.id,
+            "document_name": document.name,
+            "page_number": excerpt.page_number,
+            "start_pos": excerpt.start_pos,
+            "end_pos": excerpt.end_pos,
+        }
+        for excerpt, document in rows
+    ]
+
+
 @router.get("/co-occurrence/detail", response_model=CoOccurrenceDetail)
 def co_occurrence_detail(
     code_a_id: str = Query(...),
@@ -129,69 +211,89 @@ def co_occurrence_detail(
         from fastapi import HTTPException
         raise HTTPException(404, "Code not found")
 
-    if code_a_id == code_b_id:
-        # Diagonal: all excerpts for this code
-        codings = (
-            db.query(Excerpt, Document)
-            .join(Coding, Coding.excerpt_id == Excerpt.id)
-            .join(Document, Excerpt.document_id == Document.id)
-            .filter(Coding.code_id == code_a_id)
-            .distinct()
-            .all()
-        )
-        excerpts = [
-            {"id": ex.id, "text": ex.text, "document_name": doc.name}
-            for ex, doc in codings
-        ]
-    else:
-        # Shared excerpts (or documents) between the two codes
-        if level == "excerpt":
-            # Excerpts that have codings for BOTH code_a and code_b
-            a_excerpts = (
-                db.query(Coding.excerpt_id)
-                .filter(Coding.code_id == code_a_id)
-                .subquery()
-            )
-            shared = (
-                db.query(Excerpt, Document)
-                .join(Coding, Coding.excerpt_id == Excerpt.id)
-                .join(Document, Excerpt.document_id == Document.id)
-                .filter(
-                    Coding.code_id == code_b_id,
-                    Excerpt.id.in_(a_excerpts),
-                )
-                .distinct()
-                .all()
-            )
-        else:
-            # Documents that have codings for BOTH codes
-            a_docs = (
-                db.query(Excerpt.document_id)
-                .join(Coding, Coding.excerpt_id == Excerpt.id)
-                .filter(Coding.code_id == code_a_id)
-                .subquery()
-            )
-            shared = (
-                db.query(Excerpt, Document)
-                .join(Coding, Coding.excerpt_id == Excerpt.id)
-                .join(Document, Excerpt.document_id == Document.id)
-                .filter(
-                    Coding.code_id == code_b_id,
-                    Excerpt.document_id.in_(a_docs),
-                )
-                .distinct()
-                .all()
-            )
-        excerpts = [
-            {"id": ex.id, "text": ex.text, "document_name": doc.name}
-            for ex, doc in shared
-        ]
+    excerpts = _get_co_occurrence_excerpts(
+        db,
+        code_a_id=code_a_id,
+        code_b_id=code_b_id,
+        level=level,
+    )
 
     return CoOccurrenceDetail(
         code_a={"id": code_a.id, "name": code_a.name, "color": code_a.color},
         code_b={"id": code_b.id, "name": code_b.name, "color": code_b.color},
         count=len(excerpts),
         excerpts=excerpts,
+    )
+
+
+@router.get("/co-occurrence/export")
+def export_co_occurrence_detail(
+    code_a_id: str = Query(...),
+    code_b_id: str = Query(...),
+    level: str = Query("excerpt"),
+    db: Session = Depends(get_db),
+):
+    """Export shared excerpts for a co-occurrence pair as tabular CSV."""
+    code_a = db.query(Code).filter(Code.id == code_a_id).first()
+    code_b = db.query(Code).filter(Code.id == code_b_id).first()
+    if not code_a or not code_b:
+        from fastapi import HTTPException
+        raise HTTPException(404, "Code not found")
+
+    excerpts = _get_co_occurrence_excerpts(
+        db,
+        code_a_id=code_a_id,
+        code_b_id=code_b_id,
+        level=level,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "level",
+        "code_a_id",
+        "code_a_name",
+        "code_b_id",
+        "code_b_name",
+        "document_id",
+        "document_name",
+        "excerpt_id",
+        "page_number",
+        "start_pos",
+        "end_pos",
+        "source",
+        "excerpt_text",
+    ])
+    for excerpt in excerpts:
+        source = excerpt["document_name"]
+        if excerpt["page_number"] is not None:
+            source += f" · p. {excerpt['page_number']}"
+        source += f" · {excerpt['start_pos']}-{excerpt['end_pos']}"
+        writer.writerow([
+            level,
+            code_a.id,
+            code_a.name,
+            code_b.id,
+            code_b.name,
+            excerpt["document_id"],
+            excerpt["document_name"],
+            excerpt["id"],
+            excerpt["page_number"] or "",
+            excerpt["start_pos"],
+            excerpt["end_pos"],
+            source,
+            excerpt["text"] or "",
+        ])
+    output.seek(0)
+
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename={_co_occurrence_filename(code_a.name, code_b.name)}"
+            )
+        },
     )
 
 

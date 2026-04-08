@@ -67,6 +67,11 @@ export const deleteCode = (id: string) => api.delete(`/codes/${id}`);
 export const listCodeGroups = () => api.get<CodeGroupOut[]>('/codes/groups').then((r) => r.data);
 export const createCodeGroup = (data: { name: string; description?: string; color?: string }) =>
   api.post<CodeGroupOut>('/codes/groups', data).then((r) => r.data);
+export const updateCodeGroup = (
+  groupId: string,
+  data: { name?: string; description?: string; color?: string }
+) => api.put<CodeGroupOut>(`/codes/groups/${groupId}`, data).then((r) => r.data);
+export const deleteCodeGroup = (groupId: string) => api.delete(`/codes/groups/${groupId}`);
 export const addCodeToGroup = (groupId: string, codeId: string) =>
   api.post(`/codes/groups/${groupId}/codes/${codeId}`);
 export const removeCodeFromGroup = (groupId: string, codeId: string) =>

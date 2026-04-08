@@ -43,6 +43,12 @@ class CodeGroupCreate(BaseModel):
     color: Optional[str] = None
 
 
+class CodeGroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    color: Optional[str] = None
+
+
 class CodeGroupOut(BaseModel):
     id: str
     name: str
@@ -153,7 +159,7 @@ def delete_code(code_id: str, db: Session = Depends(get_db)):
 
 @router.get("/groups", response_model=list[CodeGroupOut])
 def list_code_groups(db: Session = Depends(get_db)):
-    groups = db.query(CodeGroup).all()
+    groups = db.query(CodeGroup).order_by(CodeGroup.name.asc()).all()
     result = []
     for g in groups:
         members = db.query(CodeGroupMember).filter(CodeGroupMember.code_group_id == g.id).all()
@@ -167,14 +173,56 @@ def list_code_groups(db: Session = Depends(get_db)):
 @router.post("/groups", response_model=CodeGroupOut)
 def create_code_group(data: CodeGroupCreate, db: Session = Depends(get_db)):
     project_id = _get_project_id(db)
-    group = CodeGroup(project_id=project_id, name=data.name, description=data.description, color=data.color)
+    group = CodeGroup(
+        project_id=project_id,
+        name=data.name,
+        description=(data.description or None),
+        color=data.color,
+    )
     db.add(group)
     db.flush()
     return CodeGroupOut(id=group.id, name=group.name, description=group.description, color=group.color, code_ids=[])
 
 
+@router.put("/groups/{group_id}", response_model=CodeGroupOut)
+def update_code_group(group_id: str, data: CodeGroupUpdate, db: Session = Depends(get_db)):
+    group = db.query(CodeGroup).filter(CodeGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Code group not found")
+    if data.name is not None:
+        group.name = data.name
+    if data.description is not None:
+        group.description = data.description or None
+    if data.color is not None:
+        group.color = data.color
+    db.flush()
+    members = db.query(CodeGroupMember).filter(CodeGroupMember.code_group_id == group.id).all()
+    return CodeGroupOut(
+        id=group.id,
+        name=group.name,
+        description=group.description,
+        color=group.color,
+        code_ids=[m.code_id for m in members],
+    )
+
+
+@router.delete("/groups/{group_id}")
+def delete_code_group(group_id: str, db: Session = Depends(get_db)):
+    group = db.query(CodeGroup).filter(CodeGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Code group not found")
+    db.delete(group)
+    return {"ok": True}
+
+
 @router.post("/groups/{group_id}/codes/{code_id}")
 def add_code_to_group(group_id: str, code_id: str, db: Session = Depends(get_db)):
+    group = db.query(CodeGroup).filter(CodeGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Code group not found")
+    code = db.query(Code).filter(Code.id == code_id).first()
+    if not code:
+        raise HTTPException(status_code=404, detail="Code not found")
     existing = db.query(CodeGroupMember).filter(
         CodeGroupMember.code_group_id == group_id, CodeGroupMember.code_id == code_id
     ).first()
@@ -187,6 +235,9 @@ def add_code_to_group(group_id: str, code_id: str, db: Session = Depends(get_db)
 
 @router.delete("/groups/{group_id}/codes/{code_id}")
 def remove_code_from_group(group_id: str, code_id: str, db: Session = Depends(get_db)):
+    group = db.query(CodeGroup).filter(CodeGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Code group not found")
     member = db.query(CodeGroupMember).filter(
         CodeGroupMember.code_group_id == group_id, CodeGroupMember.code_id == code_id
     ).first()

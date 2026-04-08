@@ -28,6 +28,12 @@ export function CodeBook() {
   const [groups, setGroups] = useState<CodeGroupOut[]>([]);
   const [showGroups, setShowGroups] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
+  const [newGroupColor, setNewGroupColor] = useState('#4ECDC4');
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editGroupName, setEditGroupName] = useState('');
+  const [editGroupDescription, setEditGroupDescription] = useState('');
+  const [editGroupColor, setEditGroupColor] = useState('#4ECDC4');
 
   useEffect(() => {
     if (state.project) {
@@ -115,8 +121,54 @@ export function CodeBook() {
   // Code groups
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;
-    await api.createCodeGroup({ name: newGroupName.trim() });
+    await api.createCodeGroup({
+      name: newGroupName.trim(),
+      description: newGroupDescription.trim() || undefined,
+      color: newGroupColor,
+    });
     setNewGroupName('');
+    setNewGroupDescription('');
+    setNewGroupColor('#4ECDC4');
+    await refreshGroups();
+  };
+
+  const handleStartEditGroup = (group: CodeGroupOut) => {
+    setEditingGroupId(group.id);
+    setEditGroupName(group.name);
+    setEditGroupDescription(group.description || '');
+    setEditGroupColor(group.color || '#4ECDC4');
+  };
+
+  const handleSaveGroup = async (groupId: string) => {
+    if (!editGroupName.trim()) return;
+    await api.updateCodeGroup(groupId, {
+      name: editGroupName.trim(),
+      description: editGroupDescription.trim() || '',
+      color: editGroupColor,
+    });
+    setEditingGroupId(null);
+    setEditGroupName('');
+    setEditGroupDescription('');
+    setEditGroupColor('#4ECDC4');
+    await refreshGroups();
+  };
+
+  const handleCancelGroupEdit = () => {
+    setEditingGroupId(null);
+    setEditGroupName('');
+    setEditGroupDescription('');
+    setEditGroupColor('#4ECDC4');
+  };
+
+  const handleDeleteGroup = async (groupId: string) => {
+    if (!confirm('Eliminar este grupo de codigos?')) return;
+    await api.deleteCodeGroup(groupId);
+    if (editingGroupId === groupId) {
+      setEditingGroupId(null);
+      setEditGroupName('');
+      setEditGroupDescription('');
+      setEditGroupColor('#4ECDC4');
+    }
     await refreshGroups();
   };
 
@@ -270,15 +322,34 @@ export function CodeBook() {
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Grupos
           </div>
-          <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+          <div style={{ padding: '6px 0', borderBottom: '1px solid var(--border-color)', marginBottom: 6 }}>
             <input
               value={newGroupName}
               onChange={(e) => setNewGroupName(e.target.value)}
               placeholder="Nombre del grupo..."
               onKeyDown={(e) => { if (e.key === 'Enter') handleCreateGroup(); }}
-              style={{ flex: 1, fontSize: 12, padding: '3px 6px' }}
+              style={{ width: '100%', marginBottom: 6, fontSize: 12 }}
             />
-            <button className="ghost small" onClick={handleCreateGroup}>+</button>
+            <input
+              value={newGroupDescription}
+              onChange={(e) => setNewGroupDescription(e.target.value)}
+              placeholder="Descripcion opcional..."
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreateGroup(); }}
+              style={{ width: '100%', marginBottom: 6, fontSize: 12 }}
+            />
+            <div className="color-grid">
+              {COLORS.map((c) => (
+                <div
+                  key={`group-${c}`}
+                  className={`color-swatch ${newGroupColor === c ? 'selected' : ''}`}
+                  style={{ backgroundColor: c }}
+                  onClick={() => setNewGroupColor(c)}
+                />
+              ))}
+            </div>
+            <button className="primary small" onClick={handleCreateGroup} style={{ marginTop: 6 }}>
+              Crear grupo
+            </button>
           </div>
           {groups.length === 0 ? (
             <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '4px' }}>
@@ -291,10 +362,85 @@ export function CodeBook() {
                 className="code-group-card"
                 onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
                 onDrop={(e) => handleDropOnGroup(e, group.id)}
+                style={{
+                  borderColor: group.color || 'var(--border-color)',
+                  background: hexToRgba(group.color || '#A0AEC0', 0.08),
+                }}
               >
-                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 2 }}>
-                  {group.name}
-                </div>
+                {editingGroupId === group.id ? (
+                  <div>
+                    <input
+                      value={editGroupName}
+                      onChange={(e) => setEditGroupName(e.target.value)}
+                      placeholder="Nombre del grupo..."
+                      style={{ width: '100%', marginBottom: 6, fontSize: 12 }}
+                    />
+                    <input
+                      value={editGroupDescription}
+                      onChange={(e) => setEditGroupDescription(e.target.value)}
+                      placeholder="Descripcion opcional..."
+                      style={{ width: '100%', marginBottom: 6, fontSize: 12 }}
+                    />
+                    <div className="color-grid">
+                      {COLORS.map((c) => (
+                        <div
+                          key={`edit-group-${group.id}-${c}`}
+                          className={`color-swatch ${editGroupColor === c ? 'selected' : ''}`}
+                          style={{ backgroundColor: c }}
+                          onClick={() => setEditGroupColor(c)}
+                        />
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                      <button className="primary small" onClick={() => handleSaveGroup(group.id)}>
+                        Guardar
+                      </button>
+                      <button className="ghost small" onClick={handleCancelGroupEdit}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="code-group-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                        <div
+                          className="code-color-dot"
+                          style={{ backgroundColor: group.color || '#A0AEC0', width: 8, height: 8 }}
+                        />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: group.description ? 2 : 0 }}>
+                            {group.name}
+                          </div>
+                          {group.description && (
+                            <div className="code-group-description">{group.description}</div>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                        <button
+                          className="ghost small"
+                          onClick={() => handleStartEditGroup(group)}
+                          title="Editar grupo"
+                          style={{ fontSize: 10, opacity: 0.6 }}
+                        >
+                          editar
+                        </button>
+                        <button
+                          className="ghost small"
+                          onClick={() => handleDeleteGroup(group.id)}
+                          title="Eliminar grupo"
+                          style={{ fontSize: 10, opacity: 0.6 }}
+                        >
+                          x
+                        </button>
+                      </div>
+                    </div>
+                    <div className="code-group-meta">
+                      {group.code_ids.length} codigo{group.code_ids.length === 1 ? '' : 's'}
+                    </div>
+                  </>
+                )}
                 {group.code_ids.length === 0 ? (
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                     Arrastra codigos aqui

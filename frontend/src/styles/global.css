@@ -855,6 +855,26 @@ textarea {
   border-color: var(--accent);
 }
 
+.code-group-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.code-group-description {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.code-group-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
 .code-group-member {
   display: inline-flex;
   align-items: center;

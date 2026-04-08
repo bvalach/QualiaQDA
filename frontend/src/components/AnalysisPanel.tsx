@@ -21,7 +21,35 @@ interface CoOccurrenceDetailData {
   code_a: { id: string; name: string; color: string };
   code_b: { id: string; name: string; color: string };
   count: number;
-  excerpts: { id: string; text: string; document_name: string }[];
+  excerpts: {
+    id: string;
+    text: string;
+    document_id: string;
+    document_name: string;
+    page_number?: number | null;
+    start_pos: number;
+    end_pos: number;
+  }[];
+}
+
+function buildCoOccurrenceExportUrl(detail: CoOccurrenceDetailData) {
+  return api.getUri({
+    url: '/analysis/co-occurrence/export',
+    params: {
+      code_a_id: detail.code_a.id,
+      code_b_id: detail.code_b.id,
+      level: 'excerpt',
+    },
+  });
+}
+
+function formatExcerptSource(excerpt: CoOccurrenceDetailData['excerpts'][number]) {
+  const parts = [excerpt.document_name];
+  if (excerpt.page_number != null) {
+    parts.push(`p. ${excerpt.page_number}`);
+  }
+  parts.push(`${excerpt.start_pos}-${excerpt.end_pos}`);
+  return parts.join(' · ');
 }
 
 export function AnalysisPanel() {
@@ -89,6 +117,13 @@ export function AnalysisPanel() {
       })
       .catch(console.error)
       .finally(() => setCoDetailLoading(false));
+  };
+
+  const handleExportCoOccurrenceDetail = () => {
+    if (!coDetail) return;
+    const link = document.createElement('a');
+    link.href = buildCoOccurrenceExportUrl(coDetail);
+    link.click();
   };
 
   const renderContent = () => {
@@ -180,6 +215,9 @@ export function AnalysisPanel() {
                           )}
                         </span>
                         <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="ghost small" onClick={handleExportCoOccurrenceDetail}>
+                            CSV
+                          </button>
                           <button className="ghost small" onClick={() => setCoView('matrix')}>
                             Matriz
                           </button>
@@ -194,7 +232,7 @@ export function AnalysisPanel() {
                       <div className="cooccurrence-detail-list">
                         {coDetail.excerpts.map((ex) => (
                           <div key={ex.id} className="cooccurrence-detail-excerpt">
-                            <div className="cooccurrence-detail-doc">{ex.document_name}</div>
+                            <div className="cooccurrence-detail-doc">{formatExcerptSource(ex)}</div>
                             <div className="cooccurrence-detail-text">
                               &ldquo;{ex.text.length > 400 ? ex.text.slice(0, 400) + '...' : ex.text}&rdquo;
                             </div>
