@@ -86,9 +86,15 @@ def create_project(data: ProjectCreate):
 @router.post("/open", response_model=ProjectInfo)
 def open_project(data: ProjectOpenRequest):
     """Open an existing .qualia project file."""
-    file_path = Path(data.file_path)
-    if not file_path.exists():
+    file_path = Path(data.file_path).expanduser().resolve()
+    data_dir = settings.qualia_data_dir.expanduser().resolve()
+
+    if file_path.suffix != ".qualia":
+        raise HTTPException(status_code=400, detail="Invalid project file extension")
+    if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Project file not found")
+    if not file_path.is_relative_to(data_dir):
+        raise HTTPException(status_code=400, detail="Project file must be inside the data directory")
 
     engine = get_engine(file_path)
     # Apply any new tables/indices/constraints to existing projects
